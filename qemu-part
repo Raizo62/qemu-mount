@@ -32,6 +32,8 @@ EOF
 [ $# -ne 1 ] && usage "wrong number of arguments"
 image="$1"
 
+[ -e "$image" ] || error "$image: no such file"
+[ -f "$image" ] || error "$image must be a regular file"
 img_fmt=`qemu-img info "$image" | sed -n 's/^file format: \(.*\)/\1/p'`
 [ -n "$img_fmt" ] || error "$image has unknown format"
 
