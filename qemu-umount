@@ -32,5 +32,6 @@ fi
 nbd=`basename "$nbd_path" .mount`
 
 # umount and detach
+sync
 $SUDO sh -c "umount '/dev/$nbd' && qemu-nbd -d '/dev/$nbd'" || exit $?
 rm -f "/tmp/${nbd}.mount"

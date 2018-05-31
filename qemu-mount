@@ -98,9 +98,10 @@ $SUDO modprobe nbd || exit $?
 $SUDO modprobe vfat 2> /dev/null
 
 # lock
+umask=`umask`; umask 0
 (
 	flock -w 5 9 || error "Can't get mount lock"
-	chmod a+rw /var/lock/qemu-mount.lock 2> /dev/null
+	umask $umask
 
 	# already in use?
 	grep -q -F -x "$full_image" /tmp/nbd*.mount 2> /dev/null &&
