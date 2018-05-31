@@ -1,0 +1,71 @@
+#!/bin/sh
+#
+# show partition table of qemu image file
+#
+
+prog=`basename $0`
+
+# use sudo for unprivileged users
+SUDO=
+[ "$(id -u)" -ne 0 ] && SUDO=sudo
+
+# print error message
+error() {
+	echo $prog: "$@" 2>&1
+	exit 1
+}
+
+# print usage
+usage() {
+	if [ $# -ge 1 ]; then
+		[ -n "$*" ] && echo $prog: "$@" 2>&1
+		echo 2>&1
+	fi
+	cat << EOF >&2
+Show partition table of qemu image file
+
+Usage: $prog qemu_image
+EOF
+	exit 1
+}
+
+[ $# -ne 1 ] && usage "wrong number of arguments"
+image="$1"
+
+img_fmt=`qemu-img info "$image" | sed -n 's/^file format: \(.*\)/\1/p'`
+[ -n "$img_fmt" ] || error "$image has unknown format"
+
+# load kernel module, check if sudo works
+$SUDO modprobe nbd || exit $?
+
+# lock
+lock="/var/lock/qemu-mount.lock"
+
+abort=
+trap 'abort=1' 1 2 3 15
+while ! mkdir $lock 2> /dev/null; do
+	sleep 0.3
+	[ -n "$abort" ] && exit 143
+done
+trap "rmdir $lock" 0
+
+# find free nbd device
+nbd_size=1
+for nbd in /sys/class/block/nbd*; do
+	nbd_size=`cat ${nbd}/size`
+	[ $nbd_size -gt 0 ] || break
+done
+[ $nbd_size -gt 0 ]  && error "no free nbd devices"
+nbd=`basename $nbd`
+
+# qemu-nbd
+$SUDO qemu-nbd -c "/dev/$nbd" -f "$img_fmt" "$image"
+ret=$?
+[ $ret -ne 0 ] && exit $ret
+
+# show partition table
+$SUDO fdisk -l "/dev/$nbd"
+ret=$?
+$SUDO qemu-nbd -d "/dev/$nbd" > /dev/null 2>&1
+
+exit $ret

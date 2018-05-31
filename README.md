@@ -10,6 +10,11 @@ The qemu-mount scripts hide the use of NBD, they offer a similar
 interface as the normal mount tools. The scripts can be used as a
 normal user, the privileged commands are then started with sudo.
 
+## qemu-part - show partition table
+
+qemu-part shows the partition table of a qemu image, just use
+`qemu-part <qemu_image>`.
+
 ## qemu-mount - mount QEMU image
 
 qemu-mount has the following usage:
