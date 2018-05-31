@@ -91,12 +91,6 @@ full_mdir=`readlink -f "$mdir"`
 img_fmt=`qemu-img info "$image" | sed -n 's/^file format: \(.*\)/\1/p'`
 [ -n "$img_fmt" ] || error "$image has unknown format"
 
-# already in use?
-grep -q -F -x "$full_image" /tmp/nbd*.mount 2> /dev/null &&
-	error "$image already mounted"
-grep -q -F -x "$full_mdir" /tmp/nbd*.mount 2> /dev/null &&
-	error "$mdir already in use"
-
 # load kernel module, check if sudo works
 $SUDO modprobe nbd || exit $?
 
@@ -104,48 +98,49 @@ $SUDO modprobe nbd || exit $?
 $SUDO modprobe vfat 2> /dev/null
 
 # lock
-lock="/var/lock/qemu-mount.lock"
+(
+	flock -w 5 9 || error "Can't get mount lock"
+	chmod a+rw /var/lock/qemu-mount.lock 2> /dev/null
 
-abort=
-trap 'abort=1' 1 2 3 15
-while ! mkdir $lock 2> /dev/null; do
-	sleep 0.3
-	[ -n "$abort" ] && exit 143
-done
-trap "rmdir $lock" 0
+	# already in use?
+	grep -q -F -x "$full_image" /tmp/nbd*.mount 2> /dev/null &&
+		error "$image already mounted"
+	grep -q -F -x "$full_mdir" /tmp/nbd*.mount 2> /dev/null &&
+		error "$mdir already in use"
 
-# find free nbd device
-nbd_size=1
-for nbd in /sys/class/block/nbd*; do
-	nbd_size=`cat ${nbd}/size`
-	[ $nbd_size -gt 0 ] || break
-done
-[ $nbd_size -gt 0 ]  && error "no free nbd devices"
-nbd=`basename $nbd`
+	# find free nbd device
+	nbd_size=1
+	for nbd in /sys/class/block/nbd*; do
+		nbd_size=`cat ${nbd}/size`
+		[ $nbd_size -gt 0 ] || break
+	done
+	[ $nbd_size -gt 0 ]  && error "no free nbd devices"
+	nbd=`basename $nbd`
 
-# reserve nbd device
-echo "${full_image}\n${full_mdir}" > "/tmp/${nbd}.mount" || exit $?
+	# reserve nbd device
+	echo "${full_image}\n${full_mdir}" > "/tmp/${nbd}.mount" || exit $?
 
-# qemu-nbd
-opt_part=
-[ $partition -gt 0 ] && opt_part="-P $partition"
-$SUDO qemu-nbd -c "/dev/$nbd" -f "$img_fmt" $opt_part "$full_image"
-ret=$?
-if [ $ret -ne 0 ]; then
-	rm -f "/tmp/${nbd}.mount"
+	# qemu-nbd
+	opt_part=
+	[ $partition -gt 0 ] && opt_part="-P $partition"
+	$SUDO qemu-nbd -c "/dev/$nbd" -f "$img_fmt" $opt_part "$full_image"
+	ret=$?
+	if [ $ret -ne 0 ]; then
+		rm -f "/tmp/${nbd}.mount"
+		exit $ret
+	fi
+
+	# mount
+	options=
+	[ -n "$read_only" ] && options="$options,ro"
+	[ -n "$set_uid" ] && options="$options,uid=`id -u`,gid=`id -g`"
+	[ -n "$options" ] && options="-o ${options#,}"
+	[ -n "$fstype" ] && options="-t $fstype ${options#,}"
+	$SUDO mount $options "/dev/$nbd" "$full_mdir"
+	ret=$?
+	if [ $ret -ne 0 ]; then
+		$SUDO qemu-nbd -d "/dev/$nbd" > /dev/null 2>&1
+		rm -f "/tmp/${nbd}.mount"
+	fi
 	exit $ret
-fi
-
-# mount
-options=
-[ -n "$read_only" ] && options="$options,ro"
-[ -n "$set_uid" ] && options="$options,uid=`id -u`,gid=`id -g`"
-[ -n "$options" ] && options="-o ${options#,}"
-[ -n "$fstype" ] && options="-t $fstype ${options#,}"
-$SUDO mount $options "/dev/$nbd" "$full_mdir"
-ret=$?
-if [ $ret -ne 0 ]; then
-	$SUDO qemu-nbd -d "/dev/$nbd" > /dev/null 2>&1
-	rm -f "/tmp/${nbd}.mount"
-fi
-exit $ret
+) 9>> /var/lock/qemu-mount.lock
