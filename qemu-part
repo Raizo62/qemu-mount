@@ -5,33 +5,29 @@
 
 prog=`basename $0`
 
-# use sudo for unprivileged users
-SUDO=
-[ "$(id -u)" -ne 0 ] && SUDO=sudo
-
 # print error message
 error() {
 	echo $prog: "$@" 2>&1
 	exit 1
 }
 
-# print usage
-usage() {
-	if [ $# -ge 1 ]; then
-		[ -n "$*" ] && echo $prog: "$@" 2>&1
-		echo 2>&1
-	fi
+# check command line
+if [ $# -ne 1 -o "$1" = "-h" -o "$1" = "-?" ]; then
 	cat << EOF >&2
 Show partition table of qemu image file
 
 Usage: $prog qemu_image
 EOF
 	exit 1
-}
+fi
 
-[ $# -ne 1 ] && usage "wrong number of arguments"
 image="$1"
 
+# use sudo for unprivileged users
+SUDO=
+[ "$(id -u)" -ne 0 ] && SUDO=sudo
+
+# check image
 [ -e "$image" ] || error "$image: no such file"
 [ -f "$image" ] || error "$image must be a regular file"
 img_fmt=`qemu-img info "$image" | sed -n 's/^file format: \(.*\)/\1/p'`
