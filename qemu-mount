@@ -80,14 +80,14 @@ done
 [ $# -ne 2 ] && usage "wrong number of arguments"
 image="$1"
 mdir="$2"
-full_image=`readlink -f "$image"`
-full_mdir=`readlink -f "$mdir"`
 
 # check file types
 [ -e "$image" ] || error "$image: no such file"
 [ -f "$image" ] || error "$image must be a regular file"
 [ -e "$mdir" ] || error "$mdir: no such directory"
 [ -d "$mdir" ] || error "$mdir must be a directory"
+full_image=`readlink -f "$image"`
+full_mdir=`readlink -f "$mdir"`
 img_fmt=`qemu-img info "$image" | sed -n 's/^file format: \(.*\)/\1/p'`
 [ -n "$img_fmt" ] || error "$image has unknown format"
 
@@ -136,10 +136,11 @@ umask=`umask`; umask 0
 	[ -n "$read_only" ] && options="$options,ro"
 	[ -n "$set_uid" ] && options="$options,uid=`id -u`,gid=`id -g`"
 	[ -n "$options" ] && options="-o ${options#,}"
-	[ -n "$fstype" ] && options="-t $fstype ${options#,}"
+	[ -n "$fstype" ] && options="-t $fstype $options"
 	$SUDO mount $options "/dev/$nbd" "$full_mdir"
 	ret=$?
 	if [ $ret -ne 0 ]; then
+		sync
 		$SUDO qemu-nbd -d "/dev/$nbd" > /dev/null 2>&1
 		rm -f "/tmp/${nbd}.mount"
 	fi
