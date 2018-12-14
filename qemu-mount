@@ -3,7 +3,7 @@
 # mount qemu image file into a directory
 #
 
-prog=`basename $0`
+prog=$(basename "$0")
 
 # use sudo for unprivileged users
 SUDO=
@@ -11,14 +11,14 @@ SUDO=
 
 # print error message
 error() {
-	echo $prog: "$@" 2>&1
+	echo "$prog:" "$@" 2>&1
 	exit 1
 }
 
 # print usage
 usage() {
 	if [ $# -ge 1 ]; then
-		[ -n "$*" ] && echo $prog: "$@" 2>&1
+		[ -n "$*" ] && echo "$prog:" "$@" 2>&1
 		echo 2>&1
 	fi
 	cat << EOF >&2
@@ -40,10 +40,10 @@ EOF
 # Without arguments: print mounted images
 if [ $# -eq 0 ]; then
 	for file in /tmp/nbd*.mount; do
-		nbd=`basename "$file" .mount`
+		nbd=$(basename "$file" .mount)
 		[ "$nbd" = "nbd*" ] && exit 0
 		image=
-		while read line; do
+		while read -r line; do
 			if [ -z "$image" ]; then
 				image="$line"
 			else
@@ -57,26 +57,24 @@ if [ $# -eq 0 ]; then
 fi
 
 # parse command line
-getopt=`getopt -n "$prog" -s sh p:rt:u "$@"` || usage ""
-eval set -- "$getopt"
-
 partition=1
 read_only=
 fstype=
 set_uid=
-while [ $# -ge 1 ]; do
-	case "$1" in
-	    -p)	partition="$2"; shift
-		echo $partition | grep -q -x "[0-9][0-9]*"
-		[ $? -ne 0 ] && error "partition number must be numeric"
-		;;
-	    -r)	read_only=1 ;;
-	    -t)	fstype="$2"; shift ;;
-	    -u)	set_uid=1 ;;
-	    --)	shift; break ;;
+while getopts ":p:rt:u" opt; do
+	case $opt in
+	    p)	partition="$OPTARG"
+		echo "$partition" | grep -q -x "[0-9][0-9]*" || \
+		error "partition number must be numeric" ;;
+	    r)	read_only=1 ;;
+	    t)	fstype=$OPTARG ;;
+	    u)	set_uid=1 ;;
+	    \?)	usage "illegal option -- $OPTARG" ;;
+	    :)	usage "option requires an argument -- $OPTARG" ;;
 	esac
-	shift
 done
+shift $((OPTIND-1))		# remove parsed options and args from $@ list
+
 [ $# -ne 2 ] && usage "wrong number of arguments"
 image="$1"
 mdir="$2"
@@ -86,9 +84,9 @@ mdir="$2"
 [ -f "$image" ] || error "$image must be a regular file"
 [ -e "$mdir" ] || error "$mdir: no such directory"
 [ -d "$mdir" ] || error "$mdir must be a directory"
-full_image=`readlink -f "$image"`
-full_mdir=`readlink -f "$mdir"`
-img_fmt=`qemu-img info "$image" | sed -n 's/^file format: \(.*\)/\1/p'`
+full_image=$(readlink -f "$image")
+full_mdir=$(readlink -f "$mdir")
+img_fmt=$(qemu-img info "$image" | sed -n 's/^file format: \(.*\)/\1/p')
 [ -n "$img_fmt" ] || error "$image has unknown format"
 
 # load kernel module, check if sudo works
@@ -98,10 +96,10 @@ $SUDO modprobe nbd || exit $?
 $SUDO modprobe vfat 2> /dev/null
 
 # lock
-umask=`umask`; umask 0
+umask=$(umask); umask 0
 (
 	flock -w 5 9 || error "Can't get mount lock"
-	umask $umask
+	umask "$umask"
 
 	# already in use?
 	grep -q -F -x "$full_image" /tmp/nbd*.mount 2> /dev/null &&
@@ -112,18 +110,18 @@ umask=`umask`; umask 0
 	# find free nbd device
 	nbd_size=1
 	for nbd in /sys/class/block/nbd*; do
-		nbd_size=`cat ${nbd}/size`
-		[ $nbd_size -gt 0 ] || break
+		nbd_size=$(cat "${nbd}/size")
+		[ "$nbd_size" -gt 0 ] || break
 	done
-	[ $nbd_size -gt 0 ]  && error "no free nbd devices"
-	nbd=`basename $nbd`
+	[ "$nbd_size" -gt 0 ]  && error "no free nbd devices"
+	nbd=$(basename "$nbd")
 
 	# reserve nbd device
-	echo "${full_image}\n${full_mdir}" > "/tmp/${nbd}.mount" || exit $?
+	printf "%s\n%s\n" "$full_image" "$full_mdir" > "/tmp/${nbd}.mount" || exit $?
 
 	# qemu-nbd
 	opt_part=
-	[ $partition -gt 0 ] && opt_part="-P $partition"
+	[ "$partition" -gt 0 ] && opt_part="-P $partition"
 	$SUDO qemu-nbd -c "/dev/$nbd" -f "$img_fmt" $opt_part "$full_image"
 	ret=$?
 	if [ $ret -ne 0 ]; then
@@ -134,7 +132,7 @@ umask=`umask`; umask 0
 	# mount
 	options=
 	[ -n "$read_only" ] && options="$options,ro"
-	[ -n "$set_uid" ] && options="$options,uid=`id -u`,gid=`id -g`"
+	[ -n "$set_uid" ] && options="$options,uid=$(id -u),gid=$(id -g)"
 	[ -n "$options" ] && options="-o ${options#,}"
 	[ -n "$fstype" ] && options="-t $fstype $options"
 	$SUDO mount $options "/dev/$nbd" "$full_mdir"
