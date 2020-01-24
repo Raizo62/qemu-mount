@@ -25,6 +25,7 @@ Options:
   -p partition_number      select, which partition to mount, default #1
   -r                       mount read-only
   -t fstype                set filesystem type
+  -o mount_options         additional mount options
   -u                       set owner to current user
 ```
 

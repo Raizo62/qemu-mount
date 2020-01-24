@@ -30,6 +30,7 @@ Options:
   -p partition_number      select, which partition to mount, default #1
   -r                       mount read-only
   -t fstype                set filesystem type
+  -o mount_options         additional mount options
   -u                       set owner to current user
 
 Without arguments it prints a list of mounted images.
@@ -60,20 +61,23 @@ fi
 partition=1
 read_only=
 fstype=
+mnt_options=
 set_uid=
-while getopts ":p:rt:u" opt; do
+while getopts ":p:rt:o:u" opt; do
 	case $opt in
 	    p)	partition="$OPTARG"
 		echo "$partition" | grep -q -x "[0-9][0-9]*" || \
 		error "partition number must be numeric" ;;
 	    r)	read_only=1 ;;
 	    t)	fstype=$OPTARG ;;
+	    o)	mnt_options="${mnt_options},${OPTARG}" ;;
 	    u)	set_uid=1 ;;
 	    \?)	usage "illegal option -- $OPTARG" ;;
 	    :)	usage "option requires an argument -- $OPTARG" ;;
 	esac
 done
 shift $((OPTIND-1))		# remove parsed options and args from $@ list
+mnt_options=${mnt_options#,}
 
 [ $# -ne 2 ] && usage "wrong number of arguments"
 image="$1"
@@ -130,12 +134,12 @@ umask=$(umask); umask 0
 	fi
 
 	# mount
-	options=
+	options=$mnt_options
 	[ -n "$read_only" ] && options="$options,ro"
 	[ -n "$set_uid" ] && options="$options,uid=$(id -u),gid=$(id -g)"
-	[ -n "$options" ] && options="-o ${options#,}"
-	[ -n "$fstype" ] && options="-t $fstype $options"
-	$SUDO mount $options "/dev/$nbd" "$full_mdir"
+	options=${options#,}
+	$SUDO mount ${fstype:+-t "$fstype"} ${options:+-o "$options"} \
+		"/dev/$nbd" "$full_mdir"
 	ret=$?
 	if [ $ret -ne 0 ]; then
 		sync
