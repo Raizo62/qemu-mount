@@ -94,7 +94,7 @@ img_fmt=$(qemu-img info "$image" | sed -n 's/^file format: \(.*\)/\1/p')
 [ -n "$img_fmt" ] || error "$image has unknown format"
 
 # load kernel module, check if sudo works
-$SUDO modprobe nbd || exit $?
+$SUDO modprobe nbd nbds_max=16 max_part=31 || exit $?
 
 # load FAT filesystem module
 $SUDO modprobe vfat 2> /dev/null
@@ -114,6 +114,9 @@ umask=$(umask); umask 0
 	# find free nbd device
 	nbd_size=1
 	for nbd in /sys/class/block/nbd*; do
+		[ -n "${nbd##*/nbd[0-9]}" ] && \
+		[ -n "${nbd##*/nbd[0-9][0-9]}" ] && \
+			continue
 		nbd_size=$(cat "${nbd}/size")
 		[ "$nbd_size" -gt 0 ] || break
 	done
@@ -124,9 +127,7 @@ umask=$(umask); umask 0
 	printf "%s\n%s\n" "$full_image" "$full_mdir" > "/tmp/${nbd}.mount" || exit $?
 
 	# qemu-nbd
-	opt_part=
-	[ "$partition" -gt 0 ] && opt_part="-P $partition"
-	$SUDO qemu-nbd -c "/dev/$nbd" -f "$img_fmt" $opt_part "$full_image"
+	$SUDO qemu-nbd -c "/dev/$nbd" -f "$img_fmt" "$full_image"
 	ret=$?
 	if [ $ret -ne 0 ]; then
 		rm -f "/tmp/${nbd}.mount"
@@ -134,14 +135,18 @@ umask=$(umask); umask 0
 	fi
 
 	# mount
+	nbd_dev=/dev/$nbd
+	[ "$partition" -gt 0 ] && nbd_dev="${nbd_dev}p${partition}"
 	options=$mnt_options
 	[ -n "$read_only" ] && options="$options,ro"
 	[ -n "$set_uid" ] && options="$options,uid=$(id -u),gid=$(id -g)"
 	options=${options#,}
 	$SUDO mount ${fstype:+-t "$fstype"} ${options:+-o "$options"} \
-		"/dev/$nbd" "$full_mdir"
+		"$nbd_dev" "$full_mdir"
 	ret=$?
-	if [ $ret -ne 0 ]; then
+	if [ $ret -eq 0 ]; then
+		echo "$prog completed, using device $nbd_dev"
+	else
 		sync
 		$SUDO qemu-nbd -d "/dev/$nbd" > /dev/null 2>&1
 		rm -f "/tmp/${nbd}.mount"

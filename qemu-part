@@ -34,7 +34,7 @@ img_fmt=$(qemu-img info "$image" | sed -n 's/^file format: \(.*\)/\1/p')
 [ -n "$img_fmt" ] || error "$image has unknown format"
 
 # load kernel module, check if sudo works
-$SUDO modprobe nbd || exit $?
+$SUDO modprobe nbd nbds_max=16 max_part=31 || exit $?
 
 # lock
 umask=$(umask); umask 0
@@ -45,6 +45,9 @@ umask=$(umask); umask 0
 	# find free nbd device
 	nbd_size=1
 	for nbd in /sys/class/block/nbd*; do
+		[ -n "${nbd##*/nbd[0-9]}" ] && \
+		[ -n "${nbd##*/nbd[0-9][0-9]}" ] && \
+			continue
 		nbd_size=$(cat "${nbd}/size")
 		[ "$nbd_size" -gt 0 ] || break
 	done

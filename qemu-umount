@@ -33,5 +33,5 @@ nbd=$(basename "$nbd_path" .mount)
 
 # umount and detach
 sync
-$SUDO sh -c "umount '/dev/$nbd' && qemu-nbd -d '/dev/$nbd'" || exit $?
+$SUDO sh -c "mount | grep -E -o '^/dev/$nbd(\b|p[0-9]*)' | sort -u | xargs -r umount && qemu-nbd -d '/dev/$nbd'" || exit $?
 rm -f "/tmp/${nbd}.mount"
