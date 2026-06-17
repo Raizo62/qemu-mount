@@ -27,6 +27,7 @@ Mount the qemu image file into a directory.
 Usage: $prog [OPTIONS] qemu_image mount_point
 
 Options:
+  -l                       list mounted images
   -p partition_number      select, which partition to mount, default #1
   -r                       mount read-only
   -t fstype                set filesystem type
@@ -38,8 +39,8 @@ EOF
 	exit 1
 }
 
-# Without arguments: print mounted images
-if [ $# -eq 0 ]; then
+# print mounted images
+list_images() {
 	for file in /tmp/nbd*.mount; do
 		nbd=$(basename "$file" .mount)
 		[ "$nbd" = "nbd*" ] && exit 0
@@ -55,6 +56,11 @@ if [ $# -eq 0 ]; then
 		done < "$file"
 	done
 	exit 0
+}
+
+# Without arguments: print mounted images
+if [ $# -eq 0 ]; then
+	list_images
 fi
 
 # parse command line
@@ -63,8 +69,9 @@ read_only=
 fstype=
 mnt_options=
 set_uid=
-while getopts ":p:rt:o:u" opt; do
+while getopts ":lp:rt:o:u" opt; do
 	case $opt in
+	    l)	list_images ;;
 	    p)	partition="$OPTARG"
 		echo "$partition" | grep -q -x "[0-9][0-9]*" || \
 		error "partition number must be numeric" ;;

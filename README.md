@@ -22,6 +22,7 @@ qemu-mount has the following usage:
 Usage: qemu-mount [OPTIONS] qemu_image mount_point
 
 Options:
+  -l                       list mounted images
   -p partition_number      select, which partition to mount, default #1
   -r                       mount read-only
   -t fstype                set filesystem type
