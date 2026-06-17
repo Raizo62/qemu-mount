@@ -33,8 +33,6 @@ Options:
   -t fstype                set filesystem type
   -o mount_options         additional mount options
   -u                       set owner to current user
-
-Without arguments it prints a list of mounted images.
 EOF
 	exit 1
 }
@@ -58,9 +56,9 @@ list_images() {
 	exit 0
 }
 
-# Without arguments: print mounted images
+# Without arguments: print usage
 if [ $# -eq 0 ]; then
-	list_images
+	usage
 fi
 
 # parse command line

@@ -30,8 +30,6 @@ Options:
   -u                       set owner to current user
 ```
 
-Without arguments it prints a list of mounted images.
-
 ## qemu-umount - unmount mounted QEMU image
 
 The usage of qemu-umount is simple,
